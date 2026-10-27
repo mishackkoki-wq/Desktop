@@ -24,6 +24,7 @@ let cachedAnnouncements = [];
 let cachedMessages = [];
 let cachedProgress = [];
 let cachedMaterials = [];
+let cachedApplications = [];
 const adminSectionView = { users: "all", courses: "catalogue", admissions: "applications" };
 let attendanceRegister = { courseId: "", date: "", learners: [], records: [] };
 let attendanceCourseId = "";
@@ -78,8 +79,12 @@ function showScreen(name, historyMode = "push") {
     if (name === "register") showAuthTab("create");
     else showAuthTab("login");
   }
-  else if (name === "complete") {
+  else if (name === "complete" || name === "review") {
     if (completeAppScreen) completeAppScreen.classList.add("active");
+    const reviewing = name === "review";
+    if (completeForm) completeForm.hidden = reviewing;
+    const reviewMessage = document.getElementById("application-review-message");
+    if (reviewMessage) reviewMessage.hidden = !reviewing;
     const nameEl = document.getElementById("complete-user-name");
     if (nameEl && currentUser) nameEl.textContent = currentUser.name || "Learner";
   }
@@ -239,14 +244,15 @@ if (registerForm) {
         })
       });
 
-      if (data && (data.status === "pending" || data.user)) {
-        registerForm.hidden = true;
-        const msg = document.getElementById("reg-pending-message");
-        if (msg) msg.hidden = false;
-        showToast("Profile created. Waiting for admin approval.");
-      } else {
-        showToast("Registration service is unavailable. Please try again shortly.");
-      }
+      if (!data?.token || !data.user) throw new Error("Profile was not created. Please try again.");
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem("chimera_token", authToken);
+      registerForm.hidden = true;
+      const msg = document.getElementById("reg-pending-message");
+      if (msg) msg.hidden = false;
+      showScreen("complete", "replace");
+      showToast("Profile created. Continue your registration.");
     } catch (err) {
       showToast(err.message || "Registration failed");
     } finally {
@@ -286,10 +292,9 @@ if (trackForm) {
 
       const steps = [
         { key: "created", label: "Profile created", done: true },
-        { key: "pending", label: "Awaiting admin approval", done: ["Approved", "Documents required", "Submitted"].includes(status), current: status === "Pending" },
-        { key: "approved", label: "Profile approved – complete documents", done: ["Documents required", "Submitted"].includes(status) || status === "Approved" && data.applicationComplete, current: status === "Approved" && !data.applicationComplete },
-        { key: "docs", label: "Documents submitted", done: status === "Submitted" || data.applicationComplete, current: status === "Documents required" },
-        { key: "final", label: "Application under review", done: status === "Submitted", current: status === "Submitted" }
+        { key: "submitted", label: "Course and documents submitted", done: Boolean(data.applicationComplete), current: status === "Pending" && !data.applicationComplete },
+        { key: "review", label: "Awaiting admin decision", done: ["Approved", "Rejected"].includes(status), current: status === "Submitted" },
+        { key: "final", label: "Application decision", done: ["Approved", "Rejected"].includes(status), current: ["Approved", "Rejected"].includes(status) }
       ];
 
       resultEl.hidden = false;
@@ -300,12 +305,24 @@ if (trackForm) {
         <ul class="track-timeline">
           ${steps.map(s => `<li class="${s.done ? "done" : ""} ${s.current ? "current" : ""}">${escapeHTML(s.label)}</li>`).join("")}
         </ul>
-        ${status === "Pending" ? `<p style="margin-top:1rem;font-size:.9rem;color:#6b7a82;">Please wait for the confirmation email from the admin before continuing.</p>` : ""}
-        ${status === "Approved" && !data.applicationComplete ? `<p style="margin-top:1rem;font-size:.9rem;color:#155724;">Your profile is approved. Please <button type="button" class="nsfas-link-btn" id="track-goto-login">log in</button> to complete your application (documents &amp; guardian details).</p>` : ""}
+        ${status === "Pending" && !data.applicationComplete ? `<p style="margin-top:1rem;font-size:.9rem;color:#6b7a82;">Sign in to continue your course selection and upload your documents.</p><button type="button" class="nsfas-link-btn" id="track-goto-login">Continue registration</button>` : ""}
+        ${status === "Submitted" ? `<p style="margin-top:1rem;font-size:.9rem;color:#6b7a82;">Your application and documents are being reviewed. We will email you when a decision is made.</p>` : ""}
+        ${status === "Approved" ? `<p style="margin-top:1rem;font-size:.9rem;color:#155724;">Your application is approved. <button type="button" class="nsfas-link-btn" id="track-goto-login">Log in to the learner portal</button></p>` : ""}
         ${status === "Rejected" ? `<p style="margin-top:1rem;font-size:.9rem;color:#721c24;">Your profile was not approved. Contact the institution for more information.</p>` : ""}
       `;
       const gotoLogin = document.getElementById("track-goto-login");
-      if (gotoLogin) gotoLogin.addEventListener("click", () => showAuthTab("login"));
+      if (gotoLogin) gotoLogin.addEventListener("click", () => {
+        showAuthTab("login");
+        const usernameInput = document.getElementById("username");
+        const passwordInput = document.getElementById("password");
+        const roleInput = document.getElementById("login-role");
+        if (usernameInput) usernameInput.value = data.email || query;
+        if (roleInput) roleInput.value = "learner";
+        if (passwordInput) {
+          passwordInput.value = "";
+          passwordInput.focus();
+        }
+      });
     } catch (err) {
       showToast(err.message || "Could not track application");
     } finally {
@@ -344,7 +361,7 @@ if (forgotForm) {
   });
 }
 
-// ========== Complete application (Step 2 – after approval) ==========
+// ========== Complete application (Step 2 – documents and course selection) ==========
 const completeForm = document.getElementById("complete-form");
 if (completeForm) {
   completeForm.addEventListener("submit", async (e) => {
@@ -360,7 +377,7 @@ if (completeForm) {
     const guardianEmail = document.getElementById("reg-guardian-email").value.trim();
     const agreement = document.getElementById("reg-agreement").checked;
     const idDoc = document.getElementById("reg-doc-id");
-    const matricDoc = document.getElementById("reg-doc-matric");
+    const qualificationDoc = document.getElementById("reg-doc-qualification");
 
     if (!course || !dateOfBirth || !phone || !lastSchool || !gender) {
       showToast("Please complete all required personal details");
@@ -370,8 +387,8 @@ if (completeForm) {
       showToast("Please complete guardian / next of kin details");
       return;
     }
-    if (!idDoc.files?.length || !matricDoc.files?.length) {
-      showToast("Please upload both required documents");
+    if (!idDoc.files?.length || !qualificationDoc.files?.length) {
+      showToast("Please upload your ID and qualification PDFs");
       return;
     }
     if (!agreement) {
@@ -379,10 +396,35 @@ if (completeForm) {
       return;
     }
     const maxBytes = 5 * 1024 * 1024;
-    if (idDoc.files[0].size > maxBytes || matricDoc.files[0].size > maxBytes) {
-      showToast("Each document must be 5 MB or smaller");
+    const uploadedFiles = [idDoc.files[0], qualificationDoc.files[0]];
+    if (uploadedFiles.some(file => file.size > maxBytes || !/\.pdf$/i.test(file.name))) {
+      showToast("Both documents must be PDF files no larger than 5 MB each");
       return;
     }
+    try {
+      for (const file of uploadedFiles) {
+        const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+        if (String.fromCharCode(...header) !== "%PDF-") {
+          showToast(`${file.name} is not a valid PDF file`);
+          return;
+        }
+      }
+    } catch (error) {
+      showToast(error.message || "Could not read the selected PDF files");
+      return;
+    }
+
+    const fileToPayload = file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result || "");
+        const contentBase64 = dataUrl.split(",")[1];
+        if (!contentBase64) return reject(new Error(`Could not read ${file.name}`));
+        resolve({ name: file.name, contentType: "application/pdf", contentBase64 });
+      };
+      reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+      reader.readAsDataURL(file);
+    });
 
     const submitButton = document.getElementById("complete-submit");
     submitButton.disabled = true;
@@ -404,19 +446,24 @@ if (completeForm) {
             email: guardianEmail
           },
           documents: {
-            idDocument: idDoc.files[0].name,
-            matricResults: matricDoc.files[0].name
+            idDocument: await fileToPayload(idDoc.files[0]),
+            qualificationDocument: await fileToPayload(qualificationDoc.files[0])
           },
           agreement: true
         })
       });
-      if (data && data.user) {
+      if (data?.user && data.status === "submitted") {
         currentUser = data.user;
-        currentPage = "dashboard";
-        await showApp();
-        showToast("Application submitted successfully. Welcome!");
+        showToast("Thank you for your application.");
+        showScreen("login", "replace");
+        showAuthTab("track");
+        const trackQuery = document.getElementById("track-query");
+        if (trackQuery && currentUser.email) {
+          trackQuery.value = currentUser.email;
+          trackForm?.requestSubmit();
+        }
       } else {
-        showToast("Could not submit application. Please try again.");
+        throw new Error("Could not submit your application. Please try again.");
       }
     } catch (err) {
       showToast(err.message || "Submission failed");
@@ -426,15 +473,14 @@ if (completeForm) {
   });
 }
 
-const completeLogout = document.getElementById("complete-logout");
-if (completeLogout) {
-  completeLogout.addEventListener("click", () => {
+document.querySelectorAll("#complete-logout, #review-logout").forEach(button => {
+  button.addEventListener("click", () => {
     authToken = null;
     currentUser = null;
     localStorage.removeItem("chimera_token");
     showScreen("home", "replace");
   });
-}
+});
 const completeHome = document.getElementById("complete-home");
 if (completeHome) {
   completeHome.addEventListener("click", (e) => {
@@ -588,36 +634,6 @@ function closeModal() {
 modalClose.addEventListener("click", closeModal);
 modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
 
-document.getElementById("forgot-password-link").addEventListener("click", event => {
-  event.preventDefault();
-  const knownEmail = document.getElementById("username").value.trim();
-  openModal("Reset your password", `
-    <p class="profile-intro">Enter the email and recovery answer you used when registering.</p>
-    <form id="password-recovery-form" class="profile-form">
-      <label class="profile-field"><span>Email address</span><input class="form-control" type="email" name="email" autocomplete="email" required value="${escapeHTML(knownEmail.includes("@") ? knownEmail : "")}" /></label>
-      <label class="profile-field"><span>Recovery answer</span><input class="form-control" type="text" name="recoveryAnswer" autocomplete="off" required /></label>
-      <label class="profile-field"><span>New password</span><input class="form-control" type="password" name="password" minlength="8" autocomplete="new-password" required /></label>
-    </form>`,
-    '<button class="btn btn-ghost" id="recovery-cancel" type="button">Cancel</button><button class="btn btn-primary" id="recovery-submit" type="submit" form="password-recovery-form">Update password</button>'
-  );
-  document.getElementById("recovery-cancel").onclick = closeModal;
-  document.getElementById("password-recovery-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const button = document.getElementById("recovery-submit");
-    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-    button.disabled = true;
-    try {
-      const result = await api("/auth/recover", { method: "POST", body: JSON.stringify(values) });
-      if (!result) throw new Error("Unable to connect to the LMS. Please try again when the server is available.");
-      closeModal();
-      showToast("Password updated. You can now sign in.");
-    } catch (error) {
-      showToast(error.message || "Could not reset your password");
-      button.disabled = false;
-    }
-  });
-});
-
 if (loginForm) {
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -638,20 +654,15 @@ if (loginForm) {
       currentUser = data.user;
       localStorage.setItem("chimera_token", authToken);
 
-      // Pending learners cannot access the system yet
-      if (currentUser.status === "Pending") {
-        showToast("Your profile is still pending admin approval. Please wait for the confirmation email.");
-        authToken = null;
-        currentUser = null;
-        localStorage.removeItem("chimera_token");
-        showAuthTab("track");
+      if (currentUser.role === "learner" && currentUser.status === "Submitted") {
+        showScreen("review", "replace");
+        showToast("Your application is awaiting an admin decision.");
         return;
       }
 
-      // Approved learners who have not completed step 2 → complete application screen
-      if (currentUser.role === "learner" && currentUser.status === "Approved" && !currentUser.applicationComplete) {
+      if (currentUser.role === "learner" && !currentUser.applicationComplete) {
         showScreen("complete", "replace");
-        showToast("Profile approved. Please complete your application.");
+        showToast("Continue your course selection and document upload.");
         return;
       }
 
@@ -819,7 +830,7 @@ async function loadData() {
       return null;
     }
   };
-  const [courses, assignments, users, audit, notifications, submissions, announcements, messages, materials] = await Promise.all([
+  const [courses, assignments, users, audit, notifications, submissions, announcements, messages, materials, applications] = await Promise.all([
     safeLoad("/courses"),
     safeLoad("/assignments"),
     role === "admin" ? safeLoad("/users") : Promise.resolve(null),
@@ -828,7 +839,8 @@ async function loadData() {
     role === "lecturer" || role === "admin" ? safeLoad("/submissions", true) : Promise.resolve([]),
     safeLoad("/announcements", true),
     role === "learner" || role === "lecturer" ? safeLoad("/messages", true) : Promise.resolve([]),
-    safeLoad("/materials", true)
+    safeLoad("/materials", true),
+    role === "admin" ? safeLoad("/applications") : Promise.resolve(null)
   ]);
   // Learner access is based on the authenticated programme returned by the API.
   // Do not fall back to a global demo catalogue when the API is unavailable.
@@ -846,6 +858,7 @@ async function loadData() {
   cachedAnnouncements = announcements || [];
   cachedMessages = messages || [];
   cachedMaterials = materials || [];
+  cachedApplications = applications || [];
   cachedProgress = (role === "lecturer" || role === "admin") && cachedCourses.length ? (await Promise.all(cachedCourses.map(course => safeLoad(`/progress?courseId=${encodeURIComponent(course.id)}`, true)))).flatMap(items => items || []) : [];
   updateNotificationBadge();
 }
@@ -905,7 +918,14 @@ setInterval(async () => {
       if (audit && JSON.stringify(audit) !== JSON.stringify(cachedAudit)) { cachedAudit = audit; refreshPage = true; }
     }
     if (role === "admin" && currentPage === "admissions") {
-      const progress = (await Promise.all(cachedCourses.map(course => apiOptional(`/progress?courseId=${encodeURIComponent(course.id)}`)))).flatMap(items => items || []);
+      const [users, applications, progressByCourse] = await Promise.all([
+        api("/users"),
+        api("/applications"),
+        Promise.all(cachedCourses.map(course => apiOptional(`/progress?courseId=${encodeURIComponent(course.id)}`)))
+      ]);
+      const progress = progressByCourse.flatMap(items => items || []);
+      if (users && JSON.stringify(users) !== JSON.stringify(cachedUsers)) { cachedUsers = users; refreshPage = true; }
+      if (applications && JSON.stringify(applications) !== JSON.stringify(cachedApplications)) { cachedApplications = applications; refreshPage = true; }
       if (JSON.stringify(progress) !== JSON.stringify(cachedProgress)) { cachedProgress = progress; refreshPage = true; }
     }
     if (refreshPage && currentUser) { renderNav(); renderPage(); }
@@ -1064,6 +1084,45 @@ function attachPageListeners() {
   document.querySelectorAll("[data-user-status]").forEach(button => button.onclick = async () => {
     try { await api("/users/status", { method: "POST", body: JSON.stringify({ userId: button.dataset.userStatus, active: button.dataset.active !== "false" }) }); await loadData(); renderPage(); showToast("Account status updated"); }
     catch (error) { showToast(error.message || "Could not update account"); }
+  });
+  document.querySelectorAll("[data-user-approval]").forEach(button => button.onclick = async () => {
+    const status = button.dataset.approvalStatus;
+    const controls = button.closest("tr").querySelectorAll("[data-user-approval]");
+    controls.forEach(control => { control.disabled = true; });
+    try {
+      const result = await api("/applications/decision", { method: "POST", body: JSON.stringify({ userId: button.dataset.userApproval, status }) });
+      if (!result) throw new Error("Could not update learner application. Check your server connection.");
+      await loadData();
+      renderPage();
+      showToast(`Application ${status.toLowerCase()}. Decision email sent.`);
+    } catch (error) {
+      showToast(error.message || "Could not update learner application");
+      controls.forEach(control => { control.disabled = false; });
+    }
+  });
+  document.querySelectorAll("[data-application-document]").forEach(button => button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const response = await fetch(`${API}/applications/${encodeURIComponent(button.dataset.applicationUser)}/documents/${encodeURIComponent(button.dataset.applicationDocument)}`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not download application document");
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = button.dataset.filename || "application-document.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      showToast(error.message || "Could not download application document");
+    } finally {
+      button.disabled = false;
+    }
   });
   document.querySelectorAll("[data-enroll-course]").forEach(button => button.onclick = () => updateEnrollment(button.dataset.enrollCourse, "enroll"));
   document.querySelectorAll("[data-leave-course]").forEach(button => button.addEventListener("click", event => {
@@ -1813,8 +1872,21 @@ function renderAdminAdmissionsSection(intro) {
   const tabs = adminViewTabs("admissions", [["applications", "Applications"], ["enrolments", "Enrolments"], ["progression", "Progression"]], view);
   let body = "";
   if (view === "applications") {
-    const learners = cachedUsers.filter(user => user.role === "learner" && user.selectedCourse);
-    body = '<div class="admin-table-wrap"><table class="admin-data-table"><thead><tr><th>Applicant</th><th>Programme</th><th>Submitted</th><th>Account</th><th>Status</th></tr></thead><tbody>' + (learners.map(user => '<tr><td><b>' + escapeHTML(user.name) + '</b><small class="admin-cell-sub">' + escapeHTML(user.email) + '</small></td><td>' + escapeHTML(user.selectedCourse) + '</td><td>' + (user.lastLogin ? new Date(user.lastLogin).toLocaleDateString("en-ZA") : "—") + '</td><td>' + escapeHTML(user.status || "Active") + '</td><td><span class="admin-status">' + (user.status === "Inactive" ? "Inactive" : "Registered") + '</span></td></tr>').join("") || '<tr><td colspan="5" class="admin-empty-row">No learner applications are available.</td></tr>') + '</tbody></table></div>';
+    body = '<div class="admin-table-wrap"><table class="admin-data-table"><thead><tr><th>Applicant</th><th>Course</th><th>Submitted</th><th>ID document</th><th>Qualification</th><th>Decision</th></tr></thead><tbody>' + (cachedApplications.map(application => {
+      const documentButton = (key, label) => {
+        const document = application.documents?.[key];
+        if (!document || document.available === false) return '<span class="admin-muted">Missing</span>';
+        return '<button type="button" class="admin-inline-link" data-application-document="' + key + '" data-application-user="' + escapeHTML(application.userId) + '" data-filename="' + escapeHTML(document.name) + '">' + escapeHTML(label) + ' ↓</button>';
+      };
+      const documentsAvailable = ["idDocument", "qualificationDocument"].every(key =>
+        application.documents?.[key] && application.documents[key].available !== false
+      );
+      const decision = documentsAvailable
+        ? '<button type="button" class="admin-inline-link" data-user-approval="' + escapeHTML(application.userId) + '" data-approval-status="Approved">Approve</button> <button type="button" class="admin-inline-link" data-user-approval="' + escapeHTML(application.userId) + '" data-approval-status="Rejected">Decline</button>'
+        : '<span class="admin-muted">Documents required</span>';
+      return '<tr><td><b>' + escapeHTML(application.name) + '</b><small class="admin-cell-sub">' + escapeHTML(application.email) + '</small></td><td>' + escapeHTML(application.course) + '</td><td>' + (application.submittedAt ? new Date(application.submittedAt).toLocaleDateString("en-ZA") : "—") + '</td><td>' + documentButton("idDocument", application.documents?.idDocument?.name || "Download") + '</td><td>' + documentButton("qualificationDocument", application.documents?.qualificationDocument?.name || "Download") + '</td><td>' + decision + '</td></tr>';
+    }).join("") || '<tr><td colspan="6" class="admin-empty-row">No submitted applications are awaiting review.</td></tr>') + '</tbody></table></div>';
+    body = '<p class="admin-muted">' + cachedApplications.length + ' submitted application' + (cachedApplications.length === 1 ? "" : "s") + ' awaiting review.</p>' + body;
   } else if (view === "enrolments") {
     body = '<div class="admin-table-wrap"><table class="admin-data-table"><thead><tr><th>Learner</th><th>Email</th><th>Course</th><th>Progress</th><th>Submissions</th></tr></thead><tbody>' + (cachedProgress.map(item => '<tr><td><b>' + escapeHTML(item.name) + '</b></td><td>' + escapeHTML(item.email) + '</td><td>' + escapeHTML(item.courseTitle) + '</td><td>' + (Number(item.progress) || 0) + '%</td><td>' + (Number(item.submissions) || 0) + '</td></tr>').join("") || '<tr><td colspan="5" class="admin-empty-row">No course enrolments are available.</td></tr>') + '</tbody></table></div>';
   } else {
@@ -2369,12 +2441,18 @@ initTheme();
       const me = await api("/me");
       if (me) {
         currentUser = me;
-        currentPage = "dashboard";
-        await showApp("push");
+        if (me.role === "learner" && me.status === "Submitted") showScreen("review", "push");
+        else if (me.role === "learner" && !me.applicationComplete) showScreen("complete", "push");
+        else {
+          currentPage = "dashboard";
+          await showApp("push");
+        }
       }
     } catch {
       localStorage.removeItem("chimera_token");
       authToken = null;
     }
   }
+  const requestedScreen = new URLSearchParams(location.search).get("screen");
+  if (!authToken && ["login", "register"].includes(requestedScreen)) showScreen(requestedScreen, "replace");
 })();

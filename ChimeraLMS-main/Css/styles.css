@@ -1840,7 +1840,7 @@ body.light .register-theme .login-brand h1 {
 }
 
 /* Online learner registration */
-#register-screen.registration-screen {
+#complete-app-screen.registration-screen {
   align-items: stretch;
   justify-content: flex-start;
   padding: 0 clamp(1rem, 3vw, 2.5rem) 3.5rem;
@@ -1848,8 +1848,10 @@ body.light .register-theme .login-brand h1 {
   min-height: 100vh;
   overflow: visible;
 }
-#register-screen.registration-screen.active { display: block; }
-body.light #register-screen.registration-screen { background: #f3f6f8; }
+#complete-app-screen.registration-screen.active { display: block; }
+body.light #complete-app-screen.registration-screen { background: #f3f6f8; }
+#complete-form[hidden],
+#application-review-message[hidden] { display:none; }
 .registration-shell { width: min(1120px, 100%); margin: 0 auto; }
 .registration-header { display:flex; align-items:center; justify-content:space-between; gap:1.5rem; min-height:88px; border-bottom:1px solid #dfe5e8; }
 .registration-brand { display:block; width:190px; }
@@ -1986,7 +1988,7 @@ body.light #register-screen.registration-screen { background: #f3f6f8; }
 }
 
 @media(max-width:700px) {
-  #register-screen.registration-screen { padding:0 1rem 2rem; }
+  #complete-app-screen.registration-screen { padding:0 1rem 2rem; }
   .registration-header { min-height:76px; }
   .registration-brand { width:155px; }
   .registration-intro { padding:2rem 0 1rem; }

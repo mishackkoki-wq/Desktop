@@ -131,7 +131,7 @@
         </div>
         <div class="nsfas-auth-welcome">
           <h1>Welcome to Chimera LMS</h1>
-          <p>All applicants are required to create a profile on this platform. After registration, wait for admin confirmation by email before continuing your application.</p>
+          <p>Create your profile, then sign in to continue your course selection and document upload. After submitting your documents, wait for an email with the administrator's decision.</p>
         </div>
       </aside>
 
@@ -182,7 +182,7 @@
         <div class="nsfas-panel" id="auth-panel-create" role="tabpanel" hidden>
           <div class="nsfas-panel-head">
             <h3>Create your profile</h3>
-            <p>Enter your details to start your application. You will receive an email once an admin confirms your profile.</p>
+            <p>Create your profile, then continue to course selection and document upload before an administrator reviews your application.</p>
           </div>
           <form id="register-form" class="nsfas-form">
             <div class="nsfas-field-row">
@@ -211,9 +211,8 @@
           </form>
           <div id="reg-pending-message" class="nsfas-success" hidden>
             <h4>Profile submitted</h4>
-            <p>Your profile has been created and is <strong>pending admin approval</strong>.</p>
-            <p>Please check your email for a confirmation once your profile is accepted. You can also use <strong>Track application</strong> to monitor progress.</p>
-            <p>After approval you will be able to complete step 2 (documents &amp; guardian details).</p>
+            <p>Your profile has been created. Continue registration to choose a course and upload your documents.</p>
+            <p>An administrator will review your submitted application and email you their decision.</p>
             <button type="button" class="nsfas-btn nsfas-btn-outline" data-auth-goto="track">Track application</button>
           </div>
         </div>
@@ -258,7 +257,7 @@
     </div>
   </div>
 
-  <!-- ========== COMPLETE APPLICATION (Step 2 – after approval) ========== -->
+  <!-- ========== COMPLETE APPLICATION (Step 2 – course selection and documents) ========== -->
   <div id="complete-app-screen" class="screen registration-screen">
     <main class="registration-shell">
       <header class="registration-header">
@@ -268,7 +267,7 @@
       <div class="registration-intro">
         <span class="registration-eyebrow">CHIMERA LEARNING · STUDENT PORTAL</span>
         <h1>Complete your application</h1>
-        <p>Your profile was approved. Please provide the remaining details and upload your documents.</p>
+        <p>Choose your course, provide the remaining details, and upload your PDF documents for admin review.</p>
       </div>
 
       <form id="complete-form" class="registration-form">
@@ -355,19 +354,19 @@
             <span>03</span>
             <div>
               <h2 id="documents-heading">Supporting documents</h2>
-              <p>Upload clear copies of the required documents (PDF, JPG or PNG, max 5 MB each).</p>
+              <p>Upload clear PDF copies of both required documents (maximum 5 MB each).</p>
             </div>
           </div>
           <div class="registration-grid">
             <div class="registration-field full-width">
-              <label for="reg-doc-id">Certified copy of ID document <span aria-hidden="true">*</span></label>
-              <input type="file" id="reg-doc-id" name="idDocument" accept=".pdf,.jpg,.jpeg,.png" required />
-              <p class="field-help">Upload a clear scan or photo of your South African ID document.</p>
+              <label for="reg-doc-id">ID document (PDF) <span aria-hidden="true">*</span></label>
+              <input type="file" id="reg-doc-id" name="idDocument" accept="application/pdf,.pdf" required />
+              <p class="field-help">Upload a clear scan of your ID document as a PDF.</p>
             </div>
             <div class="registration-field full-width">
-              <label for="reg-doc-matric">Matric results / National Senior Certificate <span aria-hidden="true">*</span></label>
-              <input type="file" id="reg-doc-matric" name="matricResults" accept=".pdf,.jpg,.jpeg,.png" required />
-              <p class="field-help">Upload your latest matric statement of results or certificate.</p>
+              <label for="reg-doc-qualification">Qualifications (PDF) <span aria-hidden="true">*</span></label>
+              <input type="file" id="reg-doc-qualification" name="qualificationDocument" accept="application/pdf,.pdf" required />
+              <p class="field-help">Upload your certificate or other qualification documents as a PDF.</p>
             </div>
           </div>
         </section>
@@ -395,6 +394,11 @@
         </div>
         <p class="registration-privacy-note">Your registration details and documents are used to set up your learner account and programme application.</p>
       </form>
+      <section id="application-review-message" class="registration-section" hidden>
+        <h2>Application received</h2>
+        <p>Your course selection and PDF documents have been submitted. An administrator will review your application. We will email you when a decision has been made.</p>
+        <button type="button" class="registration-back-btn" id="review-logout">Sign out</button>
+      </section>
     </main>
   </div>
 

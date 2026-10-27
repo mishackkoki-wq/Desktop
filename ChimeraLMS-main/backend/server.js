@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { AsyncLocalStorage } = require("node:async_hooks");
+const { SMTPClient } = require("emailjs");
 
 const LOCAL_ENV_FILE = path.join(__dirname, ".env");
 if (fs.existsSync(LOCAL_ENV_FILE)) {
@@ -35,6 +36,8 @@ const STATIC_ROOT = path.resolve(__dirname, "..");
 const PROGRAMMES = JSON.parse(fs.readFileSync(PROGRAMMES_FILE, "utf8"));
 const JWT_SECRET = process.env.JWT_SECRET || "chimera-lms-local-development-secret-change-me";
 const TOKEN_TTL_SECONDS = 60 * 60 * 12;
+const MAX_APPLICATION_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const MAX_APPLICATION_REQUEST_BYTES = 16 * 1024 * 1024;
 const STATIC_DIRECTORIES = new Set(["Css", "Javascript", "assets"]);
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -125,8 +128,8 @@ function verifyToken(token) {
 }
 
 function publicUser(user) {
-  const { id, name, username, email, role, avatar, profileImage, moduleProgress, moduleNotes, status, lastLogin, selectedCourse } = user;
-  return { id, name, ...(username ? { username } : {}), email, role, avatar, ...(profileImage ? { profileImage } : {}), ...(moduleProgress ? { moduleProgress } : {}), ...(moduleNotes ? { moduleNotes } : {}), status, lastLogin, ...(selectedCourse ? { selectedCourse } : {}) };
+  const { id, name, username, email, role, avatar, profileImage, moduleProgress, moduleNotes, status, lastLogin, createdAt, selectedCourse } = user;
+  return { id, name, ...(username ? { username } : {}), email, role, avatar, ...(profileImage ? { profileImage } : {}), ...(moduleProgress ? { moduleProgress } : {}), ...(moduleNotes ? { moduleNotes } : {}), status, lastLogin, ...(createdAt ? { createdAt } : {}), ...(selectedCourse ? { selectedCourse } : {}) };
 }
 
 function profileUser(user) {
@@ -140,8 +143,52 @@ function profileUser(user) {
     lastSchool: user.lastSchool || "",
     applicationComplete: Boolean(user.applicationComplete),
     guardian: user.guardian || null,
-    documents: user.documents || null
+    documents: user.documents ? Object.fromEntries(Object.entries(user.documents).map(([key, document]) => [
+      key,
+      typeof document === "string" ? document : { name: document.name, size: document.size, contentType: document.contentType }
+    ])) : null
   };
+}
+
+async function sendApplicationDecisionEmail(account, status, course) {
+  const host = String(process.env.SMTP_HOST || "").trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = String(process.env.SMTP_SECURE || (port === 465 ? "true" : "false")).toLowerCase() === "true";
+  const from = String(process.env.SMTP_FROM || "").trim();
+  const username = String(process.env.SMTP_USER || "");
+  const password = String(process.env.SMTP_PASS || "");
+  const appBaseUrl = String(process.env.APP_BASE_URL || "").trim();
+  if (!host || !from || !appBaseUrl || !Number.isInteger(port) || port < 1 || port > 65535 || Boolean(username) !== Boolean(password)) {
+    throw Object.assign(new Error("Email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_FROM, and APP_BASE_URL in backend/.env; set both SMTP_USER and SMTP_PASS if authentication is required."), { status: 503 });
+  }
+  let loginUrl;
+  try {
+    loginUrl = new URL("/?screen=login", appBaseUrl);
+    if (!["http:", "https:"].includes(loginUrl.protocol)) throw new Error("Unsupported protocol");
+  } catch {
+    throw Object.assign(new Error("APP_BASE_URL must be a valid HTTP or HTTPS URL."), { status: 503 });
+  }
+  const approved = status === "Approved";
+  const subject = approved ? "Your Chimera LMS application was approved" : "Update on your Chimera LMS application";
+  const message = approved
+    ? `Hello ${account.name},\n\nYour application for ${course} has been approved. You can now sign in to the learner portal at ${loginUrl.href} using your email address and the password you chose during registration.\n\nChimera Holdings`
+    : `Hello ${account.name},\n\nYour application for ${course} was not approved. Please contact Chimera Holdings if you would like more information.\n\nChimera Holdings`;
+  const transport = new SMTPClient({
+    host,
+    port,
+    ssl: secure,
+    tls: !secure && port === 587,
+    ...(username ? { user: username, password } : {}),
+    timeout: 10000
+  });
+  try {
+    await transport.sendAsync({ from, to: account.email, subject, text: message });
+  } catch (error) {
+    console.error("Could not send learner application decision email:", error.message);
+    throw Object.assign(new Error("The decision email could not be sent. Check the SMTP settings and try again."), { status: 502 });
+  } finally {
+    if (transport.smtp) transport.smtp.close();
+  }
 }
 
 async function send(response, status, payload) {
@@ -533,7 +580,7 @@ async function handleRequest(request, response) {
   const data = loadData();
   const authorization = request.headers.authorization || "";
   const tokenUser = verifyToken(authorization.startsWith("Bearer ") ? authorization.slice(7) : "");
-  const user = tokenUser ? data.users.find(account => account.id === tokenUser.id && account.status !== "Inactive") || null : null;
+  const user = tokenUser ? data.users.find(account => account.id === tokenUser.id && !["Inactive", "Rejected"].includes(account.status)) || null : null;
 
   if (request.method === "POST" && route === "/api/auth/login") {
     const body = await readBody(request);
@@ -569,6 +616,9 @@ async function handleRequest(request, response) {
     if (account.status === "Inactive") {
       return send(response, 403, { error: "This account is inactive. Contact an administrator." });
     }
+    if (account.role === "learner" && account.status === "Rejected") {
+      return send(response, 403, { error: "This learner profile was not approved. Contact an administrator for assistance." });
+    }
     if (isDemoAccount) {
       const { salt, hash } = hashPassword(password);
       account.passwordSalt = salt;
@@ -589,7 +639,7 @@ async function handleRequest(request, response) {
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     const name = String(body.name || "").trim();
-    const profileOnly = Boolean(body.profileOnly);
+    if (!body.profileOnly) return send(response, 400, { error: "Create your profile first, then sign in to complete your course and document application" });
 
     if (!/^[A-Za-z0-9._-]{3,30}$/.test(username)) {
       username = (email.split("@")[0] || "learner").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 24) || "learner";
@@ -619,13 +669,6 @@ async function handleRequest(request, response) {
     if (accountNumberInUse(data.users, "passportNumber", body.passportNumber)) return send(response, 409, { error: "That passport number is already registered" });
     if (!body.agreement) return send(response, 400, { error: "Please accept the registration agreement" });
 
-    // Profile-only registration (step 1) does not require a programme yet
-    let selectedProgramme = null;
-    if (!profileOnly) {
-      selectedProgramme = data.courses.find(course => courseNameKey(course.title) === courseNameKey(body.course));
-      if (!selectedProgramme) return send(response, 400, { error: "Choose one of the available certificate programmes" });
-    }
-
     const { salt, hash } = hashPassword(password);
     const learner = {
       id: crypto.randomUUID(),
@@ -634,7 +677,7 @@ async function handleRequest(request, response) {
       email,
       role: "learner",
       avatar: name.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase(),
-      status: profileOnly ? "Pending" : "Active",
+      status: "Pending",
       passwordSalt: salt,
       passwordHash: hash,
       identityNumber: body.identityNumber || "",
@@ -646,8 +689,8 @@ async function handleRequest(request, response) {
       recoveryQuestion: body.recoveryQuestion || "What was the name of your first school?",
       moduleProgress: {},
       recoveryAnswerHash: crypto.createHash("sha256").update(String(body.recoveryAnswer || body.lastSchool || name).trim().toLowerCase()).digest("hex"),
-      selectedCourse: selectedProgramme ? selectedProgramme.title : "",
-      applicationComplete: !profileOnly,
+      selectedCourse: "",
+      applicationComplete: false,
       guardian: null,
       documents: null,
       createdAt: new Date().toISOString()
@@ -657,22 +700,18 @@ async function handleRequest(request, response) {
       id: crypto.randomUUID(),
       userId: learner.id,
       course: learner.selectedCourse || "",
-      status: profileOnly ? "pending_approval" : "pending",
+      status: "profile_pending",
       submittedAt: new Date().toISOString()
     });
-    recordActivity(data, learner, profileOnly ? "Created learner profile (pending approval)" : `Registered for ${learner.selectedCourse}`, data.users.filter(item => item.role === "admin").map(item => item.id));
+    recordActivity(data, learner, "Created learner profile", data.users.filter(item => item.role === "admin").map(item => item.id));
     saveData(data);
 
-    if (profileOnly) {
-      // Do not return a session token until the profile is approved
-      return send(response, 201, {
-        status: "pending",
-        message: "Profile created. Waiting for admin approval. You will receive a confirmation email once accepted.",
-        user: { name: learner.name, email: learner.email, status: "Pending" }
-      });
-    }
-
-    return send(response, 201, { token: makeToken(learner), user: profileUser(learner) });
+    return send(response, 201, {
+      status: "profile_created",
+      message: "Profile created. Continue to registration to select a course and upload your documents.",
+      token: makeToken(learner),
+      user: profileUser(learner)
+    });
   }
 
   // Track application by ID number or email (public)
@@ -705,19 +744,33 @@ async function handleRequest(request, response) {
     });
   }
 
-  // Complete application (step 2) – requires authenticated Approved learner
+  // Complete application (step 2) – authenticated learner document submission
   if (request.method === "POST" && route === "/api/auth/complete-application") {
     if (!user) return send(response, 401, { error: "Unauthorized" });
     const account = data.users.find(item => item.id === user.id);
     if (!account || account.role !== "learner") return send(response, 403, { error: "Only learners can complete an application" });
-    if (account.status === "Pending") return send(response, 403, { error: "Your profile is still pending admin approval" });
     if (account.status === "Rejected") return send(response, 403, { error: "Your profile was not approved" });
     if (account.applicationComplete) return send(response, 400, { error: "Application already completed" });
 
-    const body = await readBody(request);
+    const body = await readBody(request, MAX_APPLICATION_REQUEST_BYTES);
     const selectedProgramme = data.courses.find(course => courseNameKey(course.title) === courseNameKey(body.course));
     if (!selectedProgramme) return send(response, 400, { error: "Choose one of the available certificate programmes" });
     if (!body.agreement) return send(response, 400, { error: "Please accept the registration agreement" });
+    const documents = {};
+    for (const key of ["idDocument", "qualificationDocument"]) {
+      const document = body.documents?.[key];
+      if (!document || typeof document !== "object") return send(response, 400, { error: "Upload both your ID document and qualification as PDF files" });
+      const name = String(document.name || "").trim();
+      const contentBase64 = String(document.contentBase64 || "");
+      if (!name || !/\.pdf$/i.test(name) || document.contentType !== "application/pdf" || !/^[A-Za-z0-9+/]*={0,2}$/.test(contentBase64)) {
+        return send(response, 400, { error: "Both application documents must be valid PDF files" });
+      }
+      const content = Buffer.from(contentBase64, "base64");
+      if (!content.length || content.length > MAX_APPLICATION_DOCUMENT_BYTES || content.toString("base64") !== contentBase64 || content.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        return send(response, 400, { error: "Each PDF must be valid and no larger than 5 MB" });
+      }
+      documents[key] = { name, size: content.length, contentType: "application/pdf", contentBase64 };
+    }
 
     account.dateOfBirth = body.dateOfBirth || "";
     account.gender = body.gender || "";
@@ -734,21 +787,18 @@ async function handleRequest(request, response) {
       phone: String(body.guardian.phone || "").trim(),
       email: String(body.guardian.email || "").trim()
     } : null;
-    account.documents = body.documents && typeof body.documents === "object" ? {
-      idDocument: String(body.documents.idDocument || "").trim(),
-      matricResults: String(body.documents.matricResults || "").trim()
-    } : null;
+    account.documents = Object.fromEntries(Object.entries(documents).map(([key, document]) => [
+      key,
+      { name: document.name, size: document.size, contentType: document.contentType }
+    ]));
     account.applicationComplete = true;
-    account.status = "Active";
+    account.status = "Submitted";
 
-    if (!data.enrollments.some(e => e.userId === account.id && e.courseId === selectedProgramme.id)) {
-      data.enrollments.push({ userId: account.id, courseId: selectedProgramme.id });
-    }
     const app = data.program_applications.find(a => a.userId === account.id);
     if (app) {
       app.course = selectedProgramme.title;
       app.status = "submitted";
-      app.documents = account.documents;
+      app.documents = documents;
       app.completedAt = new Date().toISOString();
     } else {
       data.program_applications.push({
@@ -757,12 +807,12 @@ async function handleRequest(request, response) {
         course: selectedProgramme.title,
         status: "submitted",
         submittedAt: new Date().toISOString(),
-        documents: account.documents
+        documents
       });
     }
-    recordActivity(data, account, `Completed application for ${selectedProgramme.title}`, data.users.filter(item => item.role === "admin").map(item => item.id));
+    recordActivity(data, account, `Submitted application for ${selectedProgramme.title}`, data.users.filter(item => item.role === "admin").map(item => item.id));
     saveData(data);
-    return send(response, 200, { user: profileUser(account) });
+    return send(response, 200, { user: profileUser(account), status: "submitted" });
   }
 
   if (request.method === "POST" && route === "/api/auth/recover") {
@@ -781,9 +831,87 @@ async function handleRequest(request, response) {
   }
 
   if (!user) return send(response, 401, { error: "Unauthorized" });
+  const signedInAccount = data.users.find(account => account.id === user.id);
+  if (
+    signedInAccount?.role === "learner" &&
+    (signedInAccount.status === "Submitted" || (signedInAccount.status === "Pending" && !signedInAccount.applicationComplete)) &&
+    route !== "/api/me"
+  ) {
+    return send(response, 403, { error: "Your application is awaiting review. Portal access will be available after an admin decision." });
+  }
   if (request.method === "GET" && route === "/api/me") {
     const account = data.users.find(item => item.id === user.id);
     return send(response, 200, profileUser(account));
+  }
+  if (request.method === "GET" && route === "/api/applications") {
+    if (!requireRole(user, ["admin"])) return send(response, 403, { error: "Forbidden" });
+    const applications = data.users.filter(account =>
+      account.role === "learner" &&
+      String(account.status || "").toLowerCase() === "submitted" &&
+      account.applicationComplete
+    ).map(account => {
+      const application = data.program_applications.find(item =>
+        item.userId === account.id && String(item.status || "").toLowerCase() === "submitted"
+      ) || data.program_applications.find(item => item.userId === account.id);
+      const documents = application?.documents || account.documents || {};
+      return {
+        userId: account.id,
+        name: account.name,
+        email: account.email,
+        course: application?.course || account.selectedCourse || "",
+        submittedAt: application?.completedAt || application?.submittedAt || account.createdAt || "",
+        documents: Object.fromEntries(Object.entries(documents).map(([key, document]) => [
+          key,
+          {
+            name: document.name,
+            size: document.size,
+            contentType: document.contentType,
+            available: Boolean(document.contentBase64)
+          }
+        ]))
+      };
+    });
+    return send(response, 200, applications);
+  }
+  const applicationDocumentRoute = route.match(/^\/api\/applications\/([^/]+)\/documents\/(idDocument|qualificationDocument)$/);
+  if (request.method === "GET" && applicationDocumentRoute) {
+    if (!requireRole(user, ["admin"])) return send(response, 403, { error: "Forbidden" });
+    const application = data.program_applications.find(item => item.userId === applicationDocumentRoute[1] && item.status === "submitted");
+    const document = application?.documents?.[applicationDocumentRoute[2]];
+    if (!document?.contentBase64 || document.contentType !== "application/pdf") return send(response, 404, { error: "Application document not found" });
+    const content = Buffer.from(document.contentBase64, "base64");
+    response.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'attachment; filename="application-document.pdf"',
+      "Content-Length": content.length,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    return response.end(content);
+  }
+  if (request.method === "POST" && route === "/api/applications/decision") {
+    if (!requireRole(user, ["admin"])) return send(response, 403, { error: "Forbidden" });
+    const body = await readBody(request);
+    if (!["Approved", "Rejected"].includes(body.status)) return send(response, 400, { error: "Choose Approved or Rejected" });
+    const account = data.users.find(item => item.id === body.userId && item.role === "learner");
+    const application = data.program_applications.find(item => item.userId === body.userId && String(item.status || "").toLowerCase() === "submitted");
+    if (!account || String(account.status || "").toLowerCase() !== "submitted" || !account.applicationComplete || !application?.documents?.idDocument?.contentBase64 || !application?.documents?.qualificationDocument?.contentBase64) {
+      return send(response, 409, { error: "Only submitted applications with both PDF documents can be approved or declined" });
+    }
+    const approvedCourse = body.status === "Approved"
+      ? data.courses.find(course => courseNameKey(course.title) === courseNameKey(application.course || account.selectedCourse))
+      : null;
+    if (body.status === "Approved" && !approvedCourse) return send(response, 409, { error: "The selected course is no longer available" });
+    await sendApplicationDecisionEmail(account, body.status, application.course || account.selectedCourse || "your selected programme");
+    account.status = body.status;
+    application.status = body.status.toLowerCase();
+    application.decidedAt = new Date().toISOString();
+    if (approvedCourse && !data.enrollments.some(enrollment => enrollment.userId === account.id && enrollment.courseId === approvedCourse.id)) {
+      data.enrollments.push({ userId: account.id, courseId: approvedCourse.id });
+    }
+    recordActivity(data, user, `${body.status} learner application for ${account.email}`, [account.id]);
+    saveData(data);
+    return send(response, 200, { user: publicUser(account), status: application.status });
   }
   if (route === "/api/notifications" && request.method === "GET") return send(response, 200, data.notifications.filter(n => n.userId === user.id));
   if (route === "/api/notifications/read" && request.method === "POST") {
@@ -978,15 +1106,17 @@ async function handleRequest(request, response) {
     if (!account) return send(response, 404, { error: "User not found" });
     // Support approve/reject for pending profiles, or active/inactive toggle
     if (body.status === "Approved" || body.approve === true) {
-      account.status = "Approved";
-      recordActivity(data, user, `Approved learner profile ${account.email}`, [account.id]);
+      return send(response, 400, { error: "Use the admissions application decision action so the learner is emailed" });
     } else if (body.status === "Rejected" || body.reject === true) {
-      account.status = "Rejected";
-      recordActivity(data, user, `Rejected learner profile ${account.email}`, [account.id]);
+      return send(response, 400, { error: "Use the admissions application decision action so the learner is emailed" });
     } else if (typeof body.active === "boolean") {
+      if (body.active && account.role === "learner" && ["Pending", "Submitted", "Rejected"].includes(account.status)) {
+        return send(response, 400, { error: "Use the admissions application decision action to activate a learner" });
+      }
       account.status = body.active ? "Active" : "Inactive";
       recordActivity(data, user, `${body.active ? "Reactivated" : "Deactivated"} account ${account.email}`, [account.id]);
     } else if (body.status) {
+      if (account.role === "learner") return send(response, 400, { error: "Learner status must be managed through admissions" });
       account.status = String(body.status);
       recordActivity(data, user, `Set status of ${account.email} to ${account.status}`, [account.id]);
     }

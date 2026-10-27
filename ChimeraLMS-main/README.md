@@ -7,7 +7,7 @@ Modern role-based LMS built for the system design document (Learners, Lecturers,
 | Layer     | Technology                                      |
 |-----------|-------------------------------------------------|
 | Frontend  | HTML5 + CSS3 + Vanilla JS (no frameworks)       |
-| Backend   | Node.js built-in HTTP server (no dependencies) |
+| Backend   | Node.js HTTP server + EmailJS for SMTP email    |
 | Auth      | JWT (HS256)                                     |
 | Storage   | JSON file (`backend/data.json`)                 |
 
@@ -53,6 +53,33 @@ scrypt hash and removes the demo flag. Registered accounts with saved password
 hashes continue to use their own passwords. Choose the matching account type on
 the sign-in form.
 
+The seeded staff accounts are:
+
+| Account type | Email | Initial password |
+|--------------|-------|------------------|
+| Facilitator | `s.chen@faculty.edu` | `demo` |
+| Admin | `m.rivera@admin.edu` | `demo` |
+
+### Learner application and decision emails
+After creating a profile, the applicant is signed in and can continue to
+registration page 2. They select a course, upload an ID document and
+qualification as PDF files (maximum 5 MB each), and submit the application.
+The course selection is recorded as pending; the learner is enrolled after an
+administrator approves the application. Applicants can sign back in to see the
+review status, but cannot enter the learner portal before approval.
+
+Administrators review submitted applications under **Admissions & enrolment**,
+download the two PDFs, then approve or decline. The decision email is sent
+before the application status is changed; if mail delivery fails, the decision
+is not applied and the administrator can try again after fixing the mail setup.
+
+Copy `backend/.env.example` to `backend/.env` and configure `APP_BASE_URL`,
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, and `SMTP_FROM`. Set `SMTP_USER` and
+`SMTP_PASS` when your SMTP server requires authentication. The approval email
+contains the learner portal link; the decline email informs the applicant.
+The approval link opens the sign-in form directly.
+Never commit real SMTP credentials.
+
 ## API Endpoints
 
 | Method | Path                    | Description                  | Auth      |
@@ -60,6 +87,9 @@ the sign-in form.
 | GET    | /api/health             | Health check                 | Public    |
 | POST   | /api/auth/login         | Login → JWT                  | Public    |
 | POST   | /api/auth/register      | Create learner account       | Public    |
+| POST   | /api/auth/complete-application | Submit course and PDF documents | Learner |
+| GET    | /api/applications       | List applications awaiting review | Admin |
+| POST   | /api/applications/decision | Approve or decline and email applicant | Admin |
 | GET    | /api/me                 | Current user                 | Bearer    |
 | GET    | /api/courses            | List courses                 | Bearer    |
 | GET    | /api/assignments        | List assignments             | Bearer    |

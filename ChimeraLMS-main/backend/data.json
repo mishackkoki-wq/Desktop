@@ -37,7 +37,7 @@
       "role": "admin",
       "avatar": "MR",
       "status": "Active",
-      "lastLogin": "2026-10-27T08:19:57.243Z",
+      "lastLogin": "2026-10-27T12:26:21.208Z",
       "passwordSalt": "3dcb65470e0d2ad99bdafe441c6bc41d",
       "passwordHash": "7066a0869b3344d6a4b0fb0cfbafdbc71406d87a80dabb2b9682cab2c032396646ba29df9e323b4d0b49205cb534c6cd98393c6ed93de6793f0ba6fd4f76df49",
       "identityNumber": "",
@@ -105,7 +105,7 @@
       "recoveryQuestion": "What was the name of your first school?",
       "recoveryAnswerHash": "b39e1e4511deb78e938625e761ec67d4749e7fcd104f1b73c0557ca7cbff74f6",
       "selectedCourse": "Data Science Practitioner",
-      "lastLogin": "2026-10-26T12:44:02.309Z",
+      "lastLogin": "2026-10-27T11:31:29.922Z",
       "moduleProgress": {
         "cert-data-science": {
           "Practical Skill Modules": {
@@ -185,7 +185,7 @@
       "email": "testuser99@example.com",
       "role": "learner",
       "avatar": "TU",
-      "status": "Pending",
+      "status": "Approved",
       "passwordSalt": "d92583ea7007838ab03fbc163c0af209",
       "passwordHash": "809423c18858041c6b41bc61352c0d12ee4ad5e6dae0e64ccf74503bf0860d5f5a0f231c4eee5b90b624e8833b48c3519104e4ec2337075ba5d5e11a73aebce2",
       "identityNumber": "9001015800085",
@@ -211,7 +211,7 @@
       "email": "fereza12341@gmail.com",
       "role": "learner",
       "avatar": "FY",
-      "status": "Pending",
+      "status": "Active",
       "passwordSalt": "df342cff7cd52c33a9e1194317b9711b",
       "passwordHash": "0d93a0ba632bd1a086427349419074d54062ddab3843edad24815da6cfd3da99e4db936a78570092852d29c014e5a8cee116333a6d8af7f8bcc44dbc0a0f8d7a",
       "identityNumber": "0403095803082",
@@ -228,6 +228,84 @@
       "guardian": null,
       "documents": null,
       "createdAt": "2026-10-27T08:26:21.231Z"
+    },
+    {
+      "id": "f7134f68-e14e-4ebc-9de9-94573da083db",
+      "name": "Nadia Mhlongo",
+      "username": "nadiamhlongo217",
+      "email": "nadiamhlongo217@gmail.com",
+      "role": "learner",
+      "avatar": "NM",
+      "status": "Approved",
+      "passwordSalt": "54964042464aadc822e69d3ebdb87084",
+      "passwordHash": "b522af82800871210ee691468467d36cca994e3d93e287b7fcd343845470188e6c9af2bf6c0b2423bc2a8db3257a1d04a086a494f423680eca4ba0b13665c5a7",
+      "identityNumber": "0101250221088",
+      "passportNumber": "",
+      "dateOfBirth": "",
+      "gender": "",
+      "phone": "",
+      "lastSchool": "",
+      "recoveryQuestion": "What was the name of your first school?",
+      "moduleProgress": {},
+      "recoveryAnswerHash": "21395fb7314e65cb5bbda5d82588fcd0fe8698a2a270909247b5fd10e6b4326a",
+      "selectedCourse": "",
+      "applicationComplete": false,
+      "guardian": null,
+      "documents": null,
+      "createdAt": "2026-10-27T11:33:26.187Z",
+      "lastLogin": "2026-10-27T11:34:47.735Z"
+    },
+    {
+      "id": "0d01eaa9-4e63-4bb0-a9f0-aba67465f7f2",
+      "name": "nando sitole",
+      "username": "fernandoissacasitole",
+      "email": "fernandoissacasitole@gmail.com",
+      "role": "learner",
+      "avatar": "NS",
+      "status": "Pending",
+      "passwordSalt": "ff645b45beb4929c9118721d8222b0ef",
+      "passwordHash": "099cb68c930bbe8d785c570628d4d7aceb049420520171b0da458634a79a68ed68e1184d297b7f923e9401bc52efce584f8492bc432444daecfabb0dd9e9e7f7",
+      "identityNumber": "0403095803085",
+      "passportNumber": "",
+      "dateOfBirth": "",
+      "gender": "",
+      "phone": "",
+      "lastSchool": "",
+      "recoveryQuestion": "What was the name of your first school?",
+      "moduleProgress": {},
+      "recoveryAnswerHash": "6eb68210106496f0a5e6f87409e1286830f2232e0b71477e59e4f44fa8a3ba1c",
+      "selectedCourse": "",
+      "applicationComplete": false,
+      "guardian": null,
+      "documents": null,
+      "createdAt": "2026-10-27T12:19:17.707Z",
+      "lastLogin": "2026-10-27T12:20:05.227Z"
+    },
+    {
+      "id": "5bd4aa4e-92bf-41c4-88ed-9ae9fa591f74",
+      "name": "christiaan dhludhlu",
+      "username": "boikanyodhludhlu54",
+      "email": "boikanyodhludhlu54@gmail.com",
+      "role": "learner",
+      "avatar": "CD",
+      "status": "Pending",
+      "passwordSalt": "76115ad3c7536e493f2d485c2e5d20e9",
+      "passwordHash": "400a02349b6f7f1d10f76d0242d4037faf4b8e82d6382acf17deca00a8e0715dd75723d250e4fd935c53ac6e1647cae6050c402fc59f57fa971315672acfe5e5",
+      "identityNumber": "0412185138084",
+      "passportNumber": "",
+      "dateOfBirth": "",
+      "gender": "",
+      "phone": "",
+      "lastSchool": "",
+      "recoveryQuestion": "What was the name of your first school?",
+      "moduleProgress": {},
+      "recoveryAnswerHash": "976266ef1b98f895b5194a577086d58d39d007531eabc3b565359e3d25b93a22",
+      "selectedCourse": "",
+      "applicationComplete": false,
+      "guardian": null,
+      "documents": null,
+      "createdAt": "2026-10-27T12:52:24.559Z",
+      "lastLogin": "2026-10-27T13:07:04.326Z"
     }
   ],
   "courses": [
@@ -551,9 +629,86 @@
       "course": "",
       "status": "pending_approval",
       "submittedAt": "2026-10-27T08:26:21.231Z"
+    },
+    {
+      "id": "6c67c31e-f842-41a3-bb59-9808426a15e8",
+      "userId": "f7134f68-e14e-4ebc-9de9-94573da083db",
+      "course": "",
+      "status": "pending_approval",
+      "submittedAt": "2026-10-27T11:33:26.187Z"
+    },
+    {
+      "id": "81ea46e6-987a-4daa-8332-711da6991cbd",
+      "userId": "0d01eaa9-4e63-4bb0-a9f0-aba67465f7f2",
+      "course": "",
+      "status": "pending_approval",
+      "submittedAt": "2026-10-27T12:19:17.707Z"
+    },
+    {
+      "id": "8edfec3e-2a45-468b-98ef-7ead99078831",
+      "userId": "5bd4aa4e-92bf-41c4-88ed-9ae9fa591f74",
+      "course": "",
+      "status": "pending_approval",
+      "submittedAt": "2026-10-27T12:52:24.559Z"
     }
   ],
   "audit_log": [
+    {
+      "id": "2b6cb8eb-4125-4ffd-802d-a7fbbe240202",
+      "time": "2026-10-27T12:52:24.559Z",
+      "user": "boikanyodhludhlu54@gmail.com",
+      "role": "learner",
+      "action": "Created learner profile (pending approval)",
+      "status": "Success"
+    },
+    {
+      "id": "20b908bb-f052-4939-bce4-0fdb18f6666d",
+      "time": "2026-10-27T12:19:17.707Z",
+      "user": "fernandoissacasitole@gmail.com",
+      "role": "learner",
+      "action": "Created learner profile (pending approval)",
+      "status": "Success"
+    },
+    {
+      "id": "a8a064ee-7cea-49dc-b5e8-f2a7b4cef501",
+      "time": "2026-10-27T11:34:07.877Z",
+      "user": "m.rivera@admin.edu",
+      "role": "admin",
+      "action": "Approved learner profile nadiamhlongo217@gmail.com",
+      "status": "Success"
+    },
+    {
+      "id": "f6b5d541-ea2a-4ba0-bad9-4dbb406c9a58",
+      "time": "2026-10-27T11:33:26.187Z",
+      "user": "nadiamhlongo217@gmail.com",
+      "role": "learner",
+      "action": "Created learner profile (pending approval)",
+      "status": "Success"
+    },
+    {
+      "id": "9568fb05-679c-41af-a691-c506a39b3935",
+      "time": "2026-10-27T11:28:26.316Z",
+      "user": "m.rivera@admin.edu",
+      "role": "admin",
+      "action": "Approved learner profile testuser99@example.com",
+      "status": "Success"
+    },
+    {
+      "id": "d6404cf7-63f0-4397-b8e1-fb1505bc4131",
+      "time": "2026-10-27T11:27:56.148Z",
+      "user": "m.rivera@admin.edu",
+      "role": "admin",
+      "action": "Reactivated account fereza12341@gmail.com",
+      "status": "Success"
+    },
+    {
+      "id": "68a1f974-5473-42d4-8872-023e4a9ac319",
+      "time": "2026-10-27T11:27:47.726Z",
+      "user": "m.rivera@admin.edu",
+      "role": "admin",
+      "action": "Deactivated account fereza12341@gmail.com",
+      "status": "Success"
+    },
     {
       "id": "baaba176-ccf9-4411-8673-f568bc3f5660",
       "time": "2026-10-27T08:26:21.231Z",
@@ -981,6 +1136,69 @@
   ],
   "attendance": [],
   "notifications": [
+    {
+      "id": "c4694452-1799-4201-82e0-b07a056f7d96",
+      "userId": "u3",
+      "title": "LMS activity",
+      "message": "Created learner profile (pending approval)",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T12:52:24.559Z"
+    },
+    {
+      "id": "f058549a-0b5d-4e26-a74e-aba433fbfab6",
+      "userId": "u3",
+      "title": "LMS activity",
+      "message": "Created learner profile (pending approval)",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T12:19:17.707Z"
+    },
+    {
+      "id": "c5a77426-5457-4869-a9f7-eb77c2f1eb93",
+      "userId": "f7134f68-e14e-4ebc-9de9-94573da083db",
+      "title": "LMS activity",
+      "message": "Approved learner profile nadiamhlongo217@gmail.com",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T11:34:07.877Z"
+    },
+    {
+      "id": "b951fd2b-426b-4b90-a700-204253762b18",
+      "userId": "u3",
+      "title": "LMS activity",
+      "message": "Created learner profile (pending approval)",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T11:33:26.188Z"
+    },
+    {
+      "id": "6b70fbda-be78-44cb-8559-b6145f583bf1",
+      "userId": "f2d264ae-3fe2-4dbb-9b9e-6866fde496cd",
+      "title": "LMS activity",
+      "message": "Approved learner profile testuser99@example.com",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T11:28:26.317Z"
+    },
+    {
+      "id": "3aae9932-c755-41b7-af5d-2750157ac44d",
+      "userId": "a8e222e2-84c3-4e68-bb16-5b1fb81d5d5c",
+      "title": "LMS activity",
+      "message": "Reactivated account fereza12341@gmail.com",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T11:27:56.148Z"
+    },
+    {
+      "id": "aef95991-3a0e-4c05-9b62-3ef082e83c87",
+      "userId": "a8e222e2-84c3-4e68-bb16-5b1fb81d5d5c",
+      "title": "LMS activity",
+      "message": "Deactivated account fereza12341@gmail.com",
+      "type": "update",
+      "read": false,
+      "createdAt": "2026-10-27T11:27:47.726Z"
+    },
     {
       "id": "06c08972-6e5e-49b8-9c1b-1e97a2a287a3",
       "userId": "u3",
